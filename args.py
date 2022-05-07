@@ -15,7 +15,7 @@ def parse_arguments():
         "--data", help="path to dataset base directory", default="/mnt/disk1/datasets"
     )
     parser.add_argument("--optimizer", help="Which optimizer to use", default="sgd")
-    parser.add_argument("--set", help="name of dataset", type=str, default="ImageNet")
+    parser.add_argument("--set", help="name of dataset", type=str, default="CIFAR10")
     parser.add_argument(
         "-a", "--arch", metavar="ARCH", default="ResNet18", help="model architecture"
     )
