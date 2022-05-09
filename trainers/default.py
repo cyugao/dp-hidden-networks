@@ -24,7 +24,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     # switch to train mode
     model.train()
 
-    batch_size = train_loader.batch_size
+    batch_size = args.batch_size
     num_batches = len(train_loader)
     end = time.time()
     for i, (images, target) in tqdm.tqdm(
@@ -112,6 +112,7 @@ def validate(val_loader, model, criterion, args, writer, epoch):
             progress.write_to_tensorboard(writer, prefix="test", global_step=epoch)
 
     return top1.avg, top5.avg
+
 
 def modifier(args, epoch, model):
     return

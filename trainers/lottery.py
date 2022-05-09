@@ -10,7 +10,7 @@ from utils.net_utils import (
     set_model_prune_rate,
     unfreeze_model_weights,
     unfreeze_model_subnet,
-    save_checkpoint
+    save_checkpoint,
 )
 
 
@@ -32,7 +32,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     # switch to train mode
     model.train()
 
-    batch_size = train_loader.batch_size
+    batch_size = args.batch_size
     num_batches = len(train_loader)
     end = time.time()
     for i, (images, target) in tqdm.tqdm(

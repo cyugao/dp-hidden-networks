@@ -25,7 +25,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     # switch to train mode
     model.train()
 
-    batch_size = train_loader.batch_size
+    batch_size = args.batch_size
     num_batches = len(train_loader)
     end = time.time()
     l1reg = SubnetL1RegLoss(temperature=1.0)
