@@ -209,7 +209,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch):
             )
 
 
-def test(model, device, criterion, test_loader):
+def test(model, device, criterion, test_loader, log=True):
     model.eval()
     test_loss = 0
     correct = 0
@@ -224,15 +224,17 @@ def test(model, device, criterion, test_loader):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
-
-    print(
-        "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n".format(
-            test_loss,
-            correct,
-            len(test_loader.dataset),
-            100.0 * correct / len(test_loader.dataset),
+    test_acc = correct / len(test_loader.dataset)
+    if log:
+        print(
+            "\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n".format(
+                test_loss,
+                correct,
+                len(test_loader.dataset),
+                100.0 * test_acc,
+            )
         )
-    )
+    return test_loss, test_acc
 
 
 def main():
@@ -307,6 +309,9 @@ def main():
     parser.add_argument(
         "--sparsity", type=float, default=0.5, help="how sparse is each layer"
     )
+    parser.add_argument(
+        "--no-dp", action="store_true", default=False, help="disables DP training"
+    )
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -314,7 +319,7 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 2, "pin_memory": True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
         datasets.MNIST(
             os.path.join(args.data, "mnist"),
@@ -326,7 +331,7 @@ def main():
         ),
         batch_size=args.batch_size,
         shuffle=True,
-        **kwargs
+        **kwargs,
     )
     test_loader = torch.utils.data.DataLoader(
         datasets.MNIST(
@@ -338,7 +343,7 @@ def main():
         ),
         batch_size=args.test_batch_size,
         shuffle=True,
-        **kwargs
+        **kwargs,
     )
 
     model = Net().to(device)
@@ -351,22 +356,49 @@ def main():
     )
     criterion = nn.CrossEntropyLoss().to(device)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
+    if args.no_dp:
+        privacy_engine = None
+    else:
+        privacy_engine = PrivacyEngine()
+        model, optimizer, train_loader = privacy_engine.make_private(
+            module=model,
+            optimizer=optimizer,
+            data_loader=train_loader,
+            noise_multiplier=1.1,
+            max_grad_norm=1.0,
+        )
+    log_root = "runs/mnist"
+    log_filename = "{args.sparsity}_{'dp' if not args.no_dp}"
+    # Store training losses and accuracy
+    train_losses = []
+    train_accs = []
 
-    privacy_engine = PrivacyEngine()
-    model, optimizer, train_loader = privacy_engine.make_private(
-        module=model,
-        optimizer=optimizer,
-        data_loader=train_loader,
-        noise_multiplier=1.1,
-        max_grad_norm=1.0,
-    )
     for epoch in range(1, args.epochs + 1):
         train(model, device, train_loader, optimizer, criterion, epoch)
-        test(model, device, criterion, test_loader)
+        test_loss, test_acc = test(model, device, criterion, test_loader)
+        train_loss, train_acc = test(model, device, criterion, train_loader, log=False)
+        train_losses.append(train_loss)
+        train_accs.append(train_acc)
         scheduler.step()
 
     if args.save_model:
-        torch.save(model.state_dict(), "mnist_cnn.pt")
+        torch.save(model.state_dict(), os.join(log_root, log_filename + ".pt"))
+
+    eps = privacy_engine.get_epsilon(1e-5)
+
+    history = {
+        "train_losses": train_losses,
+        "train_accs": train_accs,
+        "test_loss": test_loss,
+        "test_acc": test_acc,
+        "eps": eps,
+    }
+    print(
+        f"sparsity={args.sparsity}, dp={not args.no_dp}: test_acc={test_acc:.4f}, eps={eps:.4f}"
+    )
+
+    with open(os.join(log_root, log_filename + ".json"), "wb") as f:
+        json.dump(history, f)
 
     return privacy_engine, model, optimizer, train_loader
 
