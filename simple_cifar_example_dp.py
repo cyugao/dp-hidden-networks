@@ -169,6 +169,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = SupermaskConv(1, 32, 3, 1, bias=False)
         self.conv2 = SupermaskConv(32, 64, 3, 1, bias=False)
+        self.conv3 = SupermaskConv(64, 64, 3, 1, bias=False)
         self.dropout1 = nn.Dropout2d(0.25)
         self.dropout2 = nn.Dropout(0.5)
         self.fc1 = SupermaskLinear(9216, 128, bias=False)

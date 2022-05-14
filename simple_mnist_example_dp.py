@@ -1,8 +1,10 @@
 # General structure from https://github.com/pytorch/examples/blob/master/mnist/main.py
+# Adapted from https://github.com/allenai/hidden-networks/blob/master/simple_mnist_example.py
 from __future__ import print_function
 import argparse
 import os
 import math
+import json
 
 import numpy as np
 import torch
@@ -197,7 +199,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch):
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
-        if batch_idx % args.log_interval == 0:
+        if args.log_interval != -1 and batch_idx % args.log_interval == 0:
             print(
                 "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
                     epoch,
@@ -224,6 +226,7 @@ def test(model, device, criterion, test_loader, log=True):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
+    test_loss = test_loss.item()
     test_acc = correct / len(test_loader.dataset)
     if log:
         print(
@@ -368,7 +371,8 @@ def main():
             max_grad_norm=1.0,
         )
     log_root = "runs/mnist"
-    log_filename = "{args.sparsity}_{'dp' if not args.no_dp}"
+    os.makedirs(log_root, exist_ok=True)
+    log_filename = str(args.sparsity) + ("_dp" if not args.no_dp else "")
     # Store training losses and accuracy
     train_losses = []
     train_accs = []
@@ -382,9 +386,9 @@ def main():
         scheduler.step()
 
     if args.save_model:
-        torch.save(model.state_dict(), os.join(log_root, log_filename + ".pt"))
+        torch.save(model.state_dict(), os.path.join(log_root, log_filename + ".pt"))
 
-    eps = privacy_engine.get_epsilon(1e-5)
+    eps = privacy_engine.get_epsilon(1e-5) if privacy_engine else None
 
     history = {
         "train_losses": train_losses,
@@ -393,11 +397,9 @@ def main():
         "test_acc": test_acc,
         "eps": eps,
     }
-    print(
-        f"sparsity={args.sparsity}, dp={not args.no_dp}: test_acc={test_acc:.4f}, eps={eps:.4f}"
-    )
+    print(f"sparsity={args.sparsity}, dp={not args.no_dp}: test_acc={test_acc:.4f}")
 
-    with open(os.join(log_root, log_filename + ".json"), "wb") as f:
+    with open(os.path.join(log_root, log_filename + ".json"), "w") as f:
         json.dump(history, f)
 
     return privacy_engine, model, optimizer, train_loader
